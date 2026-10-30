@@ -1,0 +1,53 @@
+name: Build 1001 SK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cek struktur repo
+        run: |
+          echo "Isi root repo:"
+          ls -la
+          for f in index.html package.json vite.config.js src/main.jsx src/App.jsx; do
+            if [ ! -f "$f" ]; then
+              echo "::error::File $f tidak ada di root repo. Upload ISI folder proyek, bukan folder pembungkusnya."
+              exit 1
+            fi
+          done
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --loglevel=error
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload hasil build
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1001-SK-dist
+          path: dist/
+          if-no-files-found: error
+          
