@@ -1,28 +1,73 @@
 name: Build 1001 SK
+
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   build:
+    name: Build aplikasi 1001 SK
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      # 1. Mengambil source code dari repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-            - name: Setup Node
+
+      # 2. Memasang Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           package-manager-cache: false
+
+      # 3. Memeriksa file konfigurasi
+      - name: Periksa file project
+        run: |
+          echo "Memeriksa project 1001 SK..."
+
+          if [ ! -f package.json ]; then
+            echo "ERROR: package.json tidak ditemukan!"
+            echo "Pastikan file berada di direktori utama repository."
+            exit 1
+          fi
+
+          echo "package.json ditemukan."
+          echo "Daftar file:"
+          ls -la
+
+      # 4. Memasang dependensi
       - name: Install dependencies
-        run: npm install
-      - name: Build web app
-        run: npm run build
-      - name: Upload build artifact
+        run: npm install --no-audit --no-fund
+
+      # 5. Membangun aplikasi
+      - name: Build aplikasi
+        run: npm run build --if-present
+
+      # 6. Memastikan hasil build tersedia
+      - name: Periksa hasil build
+        run: |
+          if [ -d dist ]; then
+            echo "Build berhasil!"
+            echo "Folder hasil build: dist/"
+            ls -la dist
+          else
+            echo "PERINGATAN: Folder dist tidak ditemukan."
+            echo "Project mungkin tidak menghasilkan build."
+            echo "Periksa package.json dan konfigurasi project."
+          fi
+
+      # 7. Mengunggah hasil build
+      - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: 1001-SK-dist
           path: dist/
-          
+          if-no-files-found: error
+          retention-days: 7
