@@ -15,59 +15,106 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Mengambil source code dari repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Memasang Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           package-manager-cache: false
 
-      # 3. Memeriksa file konfigurasi
-      - name: Periksa file project
+      - name: Periksa struktur repository
         run: |
-          echo "Memeriksa project 1001 SK..."
+          echo "Memeriksa isi repository..."
+          ls -la
 
-          if [ ! -f package.json ]; then
-            echo "ERROR: package.json tidak ditemukan!"
-            echo "Pastikan file berada di direktori utama repository."
+          echo ""
+          echo "Mencari file aplikasi..."
+          find . -maxdepth 5 \
+            \( -name .git -o -name node_modules \) -prune \
+            -o \( -name package.json -o -name index.html \) -type f -print
+
+      - name: Build aplikasi 1001 SK
+        shell: bash
+        run: |
+          set -e
+
+          OUTPUT="$GITHUB_WORKSPACE/artifact-output"
+          mkdir -p "$OUTPUT"
+
+          # Cari package.json di root atau subfolder
+          PACKAGE_JSON=$(find "$GITHUB_WORKSPACE" \
+            -type d \( -name .git -o -name node_modules -o -name artifact-output \) -prune \
+            -o -type f -name package.json -print \
+            | head -n 1)
+
+          if [ -n "$PACKAGE_JSON" ]; then
+            PROJECT_DIR=$(dirname "$PACKAGE_JSON")
+
+            echo "Project ditemukan: $PROJECT_DIR"
+            cd "$PROJECT_DIR"
+
+            npm install --no-audit --no-fund
+
+            # Jalankan build jika tersedia
+            if node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+              npm run build
+            else
+              echo "Script build tidak ditemukan."
+            fi
+
+            # Ambil hasil build
+            if [ -d "$PROJECT_DIR/dist" ]; then
+              cp -a "$PROJECT_DIR/dist/." "$OUTPUT/"
+            elif [ -d "$PROJECT_DIR/build" ]; then
+              cp -a "$PROJECT_DIR/build/." "$OUTPUT/"
+            elif [ -f "$PROJECT_DIR/index.html" ]; then
+              cp "$PROJECT_DIR/index.html" "$OUTPUT/"
+            else
+              echo "ERROR: Hasil build tidak ditemukan."
+              exit 1
+            fi
+
+          else
+            # Jika tidak ada package.json, cari index.html
+            INDEX_HTML=$(find "$GITHUB_WORKSPACE" \
+              -type d \( -name .git -o -name node_modules -o -name artifact-output \) -prune \
+              -o -type f -name index.html -print \
+              | head -n 1)
+
+            if [ -z "$INDEX_HTML" ]; then
+              echo "ERROR: package.json dan index.html tidak ditemukan."
+              echo "Unggah source code aplikasi ke repository."
+              exit 1
+            fi
+
+            PROJECT_DIR=$(dirname "$INDEX_HTML")
+
+            echo "Aplikasi HTML ditemukan: $PROJECT_DIR"
+            echo "Menyalin file aplikasi web..."
+
+            cp -a "$PROJECT_DIR/." "$OUTPUT/"
+
+            echo "PERINGATAN: Ini hanya penyalinan aplikasi web."
+            echo "Project belum dibangun sebagai APK Android."
+          fi
+
+          echo ""
+          echo "Memeriksa hasil..."
+          ls -la "$OUTPUT"
+
+          if [ ! -f "$OUTPUT/index.html" ]; then
+            echo "ERROR: index.html tidak ditemukan pada hasil akhir."
             exit 1
           fi
 
-          echo "package.json ditemukan."
-          echo "Daftar file:"
-          ls -la
+          echo "Hasil aplikasi tersedia."
 
-      # 4. Memasang dependensi
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      # 5. Membangun aplikasi
-      - name: Build aplikasi
-        run: npm run build --if-present
-
-      # 6. Memastikan hasil build tersedia
-      - name: Periksa hasil build
-        run: |
-          if [ -d dist ]; then
-            echo "Build berhasil!"
-            echo "Folder hasil build: dist/"
-            ls -la dist
-          else
-            echo "PERINGATAN: Folder dist tidak ditemukan."
-            echo "Project mungkin tidak menghasilkan build."
-            echo "Periksa package.json dan konfigurasi project."
-          fi
-
-      # 7. Mengunggah hasil build
       - name: Upload artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: 1001-SK-dist
-          path: dist/
+          path: artifact-output/
           if-no-files-found: error
           retention-days: 7
