@@ -22,16 +22,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cek struktur repo
+      - name: Siapkan sumber (otomatis ekstrak ZIP kalau ada)
+        id: src
         run: |
           echo "Isi root repo:"
           ls -la
-          for f in index.html package.json vite.config.js src/main.jsx src/App.jsx; do
-            if [ ! -f "$f" ]; then
-              echo "::error::File $f tidak ada di root repo. Upload ISI folder proyek, bukan folder pembungkusnya."
-              exit 1
-            fi
+          ZIP=$(ls -t *.zip 2>/dev/null | head -n 1 || true)
+          BASE="."
+          if [ -n "$ZIP" ]; then
+            echo "Memakai ZIP: $ZIP"
+            rm -rf _src
+            mkdir _src
+            unzip -q -o "$ZIP" -d _src
+            BASE="_src"
+          else
+            echo "Tidak ada ZIP, memakai file langsung di repo."
+          fi
+          DIR=""
+          for p in $(find "$BASE" -name package.json -not -path '*/node_modules/*' | sort); do
+            d=$(dirname "$p")
+            if [ -f "$d/index.html" ]; then DIR="$d"; break; fi
           done
+          if [ -z "$DIR" ]; then
+            echo "::error::index.html dan package.json tidak ditemukan. Upload ZIP proyek ke root repo."
+            find "$BASE" -not -path '*/node_modules/*' -not -path './.git/*' | head -60
+            exit 1
+          fi
+          echo "Folder proyek: $DIR"
+          ls -la "$DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -39,15 +58,16 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
+        working-directory: ${{ steps.src.outputs.dir }}
         run: npm install --no-audit --no-fund --loglevel=error
 
       - name: Build
+        working-directory: ${{ steps.src.outputs.dir }}
         run: npm run build
 
       - name: Upload hasil build
         uses: actions/upload-artifact@v4
         with:
           name: 1001-SK-dist
-          path: dist/
+          path: ${{ steps.src.outputs.dir }}/dist/
           if-no-files-found: error
-          
