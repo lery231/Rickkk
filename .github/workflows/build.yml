@@ -27,7 +27,7 @@ jobs:
         run: |
           echo "Isi root repo:"
           ls -la
-          ZIP=$(ls -t *.zip 2>/dev/null | head -n 1 || true)
+          ZIP=$(ls *.zip 2>/dev/null | sort -V | tail -n 1 || true)
           BASE="."
           if [ -n "$ZIP" ]; then
             echo "Memakai ZIP: $ZIP"
@@ -74,8 +74,12 @@ jobs:
       - name: Buat proyek Android
         working-directory: ${{ steps.src.outputs.dir }}
         run: |
-          npx cap add android
-          npx cap sync android
+          npm install --no-save --no-audit --no-fund --loglevel=error @capacitor/cli@6.1.2 @capacitor/core@6.1.2 @capacitor/android@6.1.2
+          if [ ! -f capacitor.config.json ]; then
+            echo '{"appId":"com.sk1001.coffee","appName":"1001 SK","webDir":"dist","server":{"androidScheme":"https"}}' > capacitor.config.json
+          fi
+          ./node_modules/.bin/cap add android
+          ./node_modules/.bin/cap sync android
 
       - name: Build APK
         working-directory: ${{ steps.src.outputs.dir }}/android
@@ -89,3 +93,4 @@ jobs:
           name: 1001-SK-apk
           path: ${{ steps.src.outputs.dir }}/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
