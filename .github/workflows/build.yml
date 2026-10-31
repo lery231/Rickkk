@@ -1,4 +1,4 @@
-name: Build 1001 SK
+name: Build 1001 SK APK
 
 on:
   push:
@@ -55,19 +55,37 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Install dependencies
         working-directory: ${{ steps.src.outputs.dir }}
         run: npm install --no-audit --no-fund --loglevel=error
 
-      - name: Build
+      - name: Build web
         working-directory: ${{ steps.src.outputs.dir }}
         run: npm run build
 
-      - name: Upload hasil build
+      - name: Buat proyek Android
+        working-directory: ${{ steps.src.outputs.dir }}
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: ${{ steps.src.outputs.dir }}/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: 1001-SK-dist
-          path: ${{ steps.src.outputs.dir }}/dist/
+          name: 1001-SK-apk
+          path: ${{ steps.src.outputs.dir }}/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
