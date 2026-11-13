@@ -1,0 +1,89 @@
+name: Build iOS IPA (1001 SK)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Compile 1001 SK for iOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Source ZIP (if present)
+        run: |
+          if [ -f "1001sk_source.zip" ]; then
+            echo "Mengekstrak 1001sk_source.zip..."
+            unzip -o 1001sk_source.zip
+          else
+            echo "File 1001sk_source.zip tidak ditemukan, menggunakan file langsung dari repo."
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies & Capacitor iOS
+        run: |
+          npm install
+          npm install @capacitor/ios@^6.0.0
+
+      - name: Build Web Assets (Vite)
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: npm run build
+
+      - name: Add iOS Platform & Sync Capacitor
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+          npx cap sync ios
+
+      - name: Configure iOS Photo Library & Camera Permissions
+        run: |
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Delete :NSPhotoLibraryUsageDescription" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'Digunakan untuk memilih foto menu kopi dan gambar barcode QRIS toko.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :NSCameraUsageDescription" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Digunakan untuk mengambil foto produk menu secara langsung.'" "$PLIST"
+
+      - name: Build Unsigned Xcode Archive
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/1001SK.xcarchive" \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package Unsigned IPA
+        run: |
+          mkdir -p build_ipa/Payload
+          cp -r "$RUNNER_TEMP/1001SK.xcarchive/Products/Applications/App.app" build_ipa/Payload/
+          cd build_ipa
+          zip -r ../1001-SK-v2.3-unsigned.ipa Payload
+
+      - name: Upload iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1001-SK-iOS-IPA
+          path: 1001-SK-v2.3-unsigned.ipa
+          retention-days: 14
+          
